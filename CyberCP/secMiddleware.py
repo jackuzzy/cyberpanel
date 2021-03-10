@@ -4,6 +4,7 @@ import json
 from django.shortcuts import HttpResponse, render
 import re
 from loginSystem.models import Administrator
+from ipaddr import IPAddress
 
 class secMiddleware:
 
@@ -14,35 +15,35 @@ class secMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        ipAddr = ""
+        if request.META.get('X-Forwarded-For'):
+            ipAddr = request.META.get('X-Forwarded-For').split(',')[0]
+        elif request.META.get('CF-Connecting-IP'):
+            ipAddr = request.META.get('X-Forwarded-For')
+        else:
+            ipAddr = request.META.get('REMOTE_ADDR')
+
+        try:
+            IPAddress(ipAddr)
+        except ValueError:
+            del request.session['userID']
+            del request.session['ipAddr']
+            logging.writeToFile(ipAddr)
+            final_json = json.dumps({'error_message': "Invalid IP Address!", "errorMessage": "Invalid IP Address!"})
+            return HttpResponse(final_json)
+
         try:
             uID = request.session['userID']
             admin = Administrator.objects.get(pk=uID)
-            ipAddr = request.META.get('REMOTE_ADDR')
 
-            if ipAddr.find('.') > -1:
-                if request.session['ipAddr'] == ipAddr or admin.securityLevel == secMiddleware.LOW:
-                    pass
-                else:
-                    del request.session['userID']
-                    del request.session['ipAddr']
-                    logging.writeToFile(request.META.get('REMOTE_ADDR'))
-                    final_dic = {'error_message': "Session reuse detected, IPAddress logged.",
-                                 "errorMessage": "Session reuse detected, IPAddress logged."}
-                    final_json = json.dumps(final_dic)
-                    return HttpResponse(final_json)
+            if request.session['ipAddr'] == ipAddr or admin.securityLevel == secMiddleware.LOW:
+                pass
             else:
-                ipAddr = request.META.get('REMOTE_ADDR').split(':')[:3]
-
-                if request.session['ipAddr'] == ipAddr or admin.securityLevel == secMiddleware.LOW:
-                    pass
-                else:
-                    del request.session['userID']
-                    del request.session['ipAddr']
-                    logging.writeToFile(request.META.get('REMOTE_ADDR'))
-                    final_dic = {'error_message': "Session reuse detected, IPAddress logged.",
-                                 "errorMessage": "Session reuse detected, IPAddress logged."}
-                    final_json = json.dumps(final_dic)
-                    return HttpResponse(final_json)
+                del request.session['userID']
+                del request.session['ipAddr']
+                logging.writeToFile(ipAddr)
+                final_json = json.dumps({'error_message': "Session reuse detected, IPAddress logged.","errorMessage": "Session reuse detected, IPAddress logged."})
+                return HttpResponse(final_json)
         except:
             pass
 

@@ -118,13 +118,25 @@ def verifyLogin(request):
 
                 request.session['userID'] = admin.pk
 
-                ipAddr = request.META.get('REMOTE_ADDR')
-
-                if ipAddr.find(':') > -1:
-                    ipAddr = ipAddr.split(':')[:3]
-                    request.session['ipAddr'] = ''.join(ipAddr)
+                ipAddr = ""
+                if request.META.get('X-Forwarded-For'):
+                    ipAddr = request.META.get('X-Forwarded-For').split(',')[0]
+                elif request.META.get('CF-Connecting-IP'):
+                    ipAddr = request.META.get('X-Forwarded-For')
                 else:
-                    request.session['ipAddr'] = request.META.get('REMOTE_ADDR')
+                    ipAddr = request.META.get('REMOTE_ADDR')
+
+                try:
+                    IPAddress(ipAddr)
+                except ValueError:
+                    del request.session['userID']
+                    del request.session['ipAddr']
+                    logging.writeToFile(ipAddr)
+                    final_json = json.dumps(
+                        {'error_message': "Invalid IP Address!", "errorMessage": "Invalid IP Address!"})
+                    return HttpResponse(final_json)
+
+                request.session['ipAddr'] = ipAddr
 
                 request.session.set_expiry(43200)
                 data = {'userID': admin.pk, 'loginStatus': 1, 'error_message': "None"}

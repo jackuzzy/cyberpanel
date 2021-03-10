@@ -4,6 +4,7 @@ import json
 from django.shortcuts import HttpResponse
 import re
 from loginSystem.models import Administrator
+from ipaddr import IPAddress
 
 class secMiddleware:
 
